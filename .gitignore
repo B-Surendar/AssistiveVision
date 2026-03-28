@@ -64,3 +64,9 @@ yarn-error.log*
 # ── Misc ──────────────────────────────────────────────────────
 *.zip
 *.tar.gz
+
+# Environment files
+.env.production
+env.production
+frontend/.env.production
+frontend/env.production
