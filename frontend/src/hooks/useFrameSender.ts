@@ -12,6 +12,8 @@ interface UseFrameSenderReturn {
   canvasRef: React.RefObject<HTMLCanvasElement>;
   frameStatus: ConnectionStatus;
   cameraError: string | null;
+  isFrontCamera: boolean;
+  toggleCamera: () => void;
 }
 
 export function useFrameSender(): UseFrameSenderReturn {
@@ -21,25 +23,63 @@ export function useFrameSender(): UseFrameSenderReturn {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef = useRef(true);
+  const streamRef = useRef<MediaStream | null>(null);
 
   const [frameStatus, setFrameStatus] = useState<ConnectionStatus>("connecting");
   const [cameraError, setCameraError] = useState<string | null>(null);
+  // Default: back camera (environment) for mobile
+  const [isFrontCamera, setIsFrontCamera] = useState(false);
 
-  const startCamera = useCallback(async () => {
+  const startCamera = useCallback(async (useFront: boolean) => {
+    // Stop existing stream first
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: 640, height: 480 },
+        video: {
+          width: { ideal: 640 },
+          height: { ideal: 480 },
+          // "environment" = back camera, "user" = front camera
+          facingMode: useFront ? "user" : "environment",
+        },
         audio: false,
       });
+      streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
       }
+      setCameraError(null);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setCameraError(`Camera error: ${msg}`);
+      // Fallback: if back camera not found, try any camera
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 640 }, height: { ideal: 480 } },
+          audio: false,
+        });
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play();
+        }
+        setCameraError(null);
+      } catch (fallbackErr: unknown) {
+        const msg = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
+        setCameraError(`Camera error: ${msg}`);
+      }
     }
   }, []);
+
+  const toggleCamera = useCallback(() => {
+    setIsFrontCamera((prev) => {
+      const next = !prev;
+      startCamera(next);
+      return next;
+    });
+  }, [startCamera]);
 
   const connectWS = useCallback(() => {
     if (!mountedRef.current) return;
@@ -76,7 +116,8 @@ export function useFrameSender(): UseFrameSenderReturn {
 
   useEffect(() => {
     mountedRef.current = true;
-    startCamera();
+    // Start with back camera by default
+    startCamera(false);
     connectWS();
     intervalRef.current = setInterval(sendFrame, FRAME_INTERVAL_MS);
     return () => {
@@ -84,13 +125,11 @@ export function useFrameSender(): UseFrameSenderReturn {
       if (intervalRef.current) clearInterval(intervalRef.current);
       if (reconnectRef.current) clearTimeout(reconnectRef.current);
       wsRef.current?.close();
-      if (videoRef.current?.srcObject) {
-        (videoRef.current.srcObject as MediaStream)
-          .getTracks()
-          .forEach((t) => t.stop());
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
       }
     };
   }, [startCamera, connectWS, sendFrame]);
 
-  return { videoRef, canvasRef, frameStatus, cameraError };
+  return { videoRef, canvasRef, frameStatus, cameraError, isFrontCamera, toggleCamera };
 }

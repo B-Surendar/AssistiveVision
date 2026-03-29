@@ -379,3 +379,32 @@ html, body, #root {
   .right-col      { flex: none; }
   .video-wrap     { min-height: 220px; }
 }
+
+/* ── Camera toggle button ───────────────────────────────────────────────────── */
+.camera-toggle-btn {
+  position: absolute;
+  bottom: 14px;
+  right: 14px;
+  padding: 8px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--accent);
+  background: rgba(0, 0, 0, 0.6);
+  color: var(--accent);
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  transition: all 0.2s ease;
+  z-index: 10;
+  letter-spacing: 0.04em;
+}
+ 
+.camera-toggle-btn:hover {
+  background: var(--accent-dim);
+  transform: scale(1.05);
+}
+ 
+.camera-toggle-btn:active {
+  transform: scale(0.97);
+}
